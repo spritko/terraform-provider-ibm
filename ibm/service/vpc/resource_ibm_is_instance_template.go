@@ -814,10 +814,22 @@ func instanceTemplateCreateByCatalogOffering(d *schema.ResourceData, meta interf
 
 		volcap := 100
 		volcapint64 := int64(volcap)
-		volprof := "general-purpose"
 		volTemplate.Capacity = &volcapint64
+
+		iopsOk, ok := bootvol[isVolumeIops]
+		iopsInt := iopsOk.(int)
+		if iopsInt != 0 && ok {
+			iops := int64(iopsInt)
+			volTemplate.Iops = &iops
+		}
+
+		volprof, ok := bootvol[isInstanceVolProfile]
+		volprofstr := volprof.(string)
+		if !ok || volprofstr == "" {
+			volprofstr = "general-purpose"
+		}
 		volTemplate.Profile = &vpcv1.VolumeProfileIdentity{
-			Name: &volprof,
+			Name: &volprofstr,
 		}
 
 		if encryption, ok := bootvol[isInstanceTemplateBootEncryption]; ok {
@@ -1237,10 +1249,22 @@ func instanceTemplateCreate(d *schema.ResourceData, meta interface{}, profile, n
 
 		volcap := 100
 		volcapint64 := int64(volcap)
-		volprof := "general-purpose"
 		volTemplate.Capacity = &volcapint64
+
+		iopsOk, ok := bootvol[isVolumeIops]
+		iopsInt := iopsOk.(int)
+		if iopsInt != 0 && ok {
+			iops := int64(iopsInt)
+			volTemplate.Iops = &iops
+		}
+
+		volprof, ok := bootvol[isInstanceVolProfile]
+		volprofstr := volprof.(string)
+		if !ok || volprofstr == "" {
+			volprofstr = "general-purpose"
+		}
 		volTemplate.Profile = &vpcv1.VolumeProfileIdentity{
-			Name: &volprof,
+			Name: &volprofstr,
 		}
 
 		if encryption, ok := bootvol[isInstanceTemplateBootEncryption]; ok {
