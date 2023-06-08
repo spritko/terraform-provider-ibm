@@ -2810,14 +2810,15 @@ func ResourceVolumeValidate(diff *schema.ResourceDiff) error {
 		if oldProfile.(string) == "custom" || newProfile.(string) == "custom" {
 			diff.ForceNew("profile")
 		}
-		if oldProfile.(string) == "sdp" || newProfile.(string) == "sdp" {
-			diff.ForceNew("profile")
+		if (oldProfile.(string) == "sdp" && newProfile.(string) != "sdp") ||
+			(oldProfile.(string) != "" && newProfile.(string) == "sdp") {
+			return fmt.Errorf("cannot change profile from %s to %s.", oldProfile, newProfile)
 		}
 	}
 
 	if profile != "custom" && profile != "sdp" {
 		if iops != 0 && diff.NewValueKnown("iops") && diff.HasChange("iops") {
-			return fmt.Errorf("VolumeError : iops is applicable for only custom volume profiles")
+			return fmt.Errorf("VolumeError : iops is applicable for only custom and sdp volume profiles")
 		}
 	} else {
 		if capacity == 0 {

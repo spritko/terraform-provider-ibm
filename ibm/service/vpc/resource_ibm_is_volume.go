@@ -362,8 +362,8 @@ func ResourceIBMISVolumeValidator() *validate.ResourceValidator {
 			Identifier:                 isVolumeCapacity,
 			ValidateFunctionIdentifier: validate.IntBetween,
 			Type:                       validate.TypeInt,
-			MinValue:                   "10",
-			MaxValue:                   "16000"})
+			MinValue:                   "1",
+			MaxValue:                   "32000"})
 	validateSchema = append(validateSchema,
 		validate.ValidateSchema{
 			Identifier:                 isVolumeSourceSnapshot,
