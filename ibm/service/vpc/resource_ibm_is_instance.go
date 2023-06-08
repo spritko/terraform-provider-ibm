@@ -667,12 +667,16 @@ func ResourceIBMISInstance() *schema.Resource {
 							ValidateFunc: validate.InvokeValidator("ibm_is_instance", isInstanceBootSize),
 						},
 						isInstanceBootIOPS: {
-							Type:     schema.TypeInt,
-							Computed: true,
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Computed:    true,
+							Description: "Boot volume IOPS",
 						},
 						isInstanceBootProfile: {
-							Type:     schema.TypeString,
-							Computed: true,
+							Type:        schema.TypeString,
+							Optional:    true,
+							Computed:    true,
+							Description: "Boot volume profile",
 						},
 						isInstanceBootVolumeTags: {
 							Type:        schema.TypeSet,
@@ -1181,9 +1185,20 @@ func instanceCreateByImage(d *schema.ResourceData, meta interface{}, profile, na
 			}
 		}
 
-		volprof := "general-purpose"
+		iopsOk, ok := bootvol[isVolumeIops]
+		iopsInt := iopsOk.(int)
+		if iopsInt != 0 && ok {
+			iops := int64(iopsInt)
+			volTemplate.Iops = &iops
+		}
+
+		volprof, ok := bootvol[isInstanceVolProfile]
+		volprofstr := volprof.(string)
+		if !ok || volprofstr == "" {
+			volprofstr = "general-purpose"
+		}
 		volTemplate.Profile = &vpcv1.VolumeProfileIdentity{
-			Name: &volprof,
+			Name: &volprofstr,
 		}
 		var userTags *schema.Set
 		if v, ok := bootvol[isInstanceBootVolumeTags]; ok {

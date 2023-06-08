@@ -254,7 +254,7 @@ func ResourceIBMISInstanceVolumeAttachmentValidator() *validate.ResourceValidato
 			ValidateFunctionIdentifier: validate.ValidateAllowedStringValue,
 			Type:                       validate.TypeString,
 			Optional:                   true,
-			AllowedValues:              "general-purpose, 5iops-tier, 10iops-tier, custom",
+			AllowedValues:              "general-purpose, 5iops-tier, 10iops-tier, custom, sdp",
 		})
 	validateSchema = append(validateSchema,
 		validate.ValidateSchema{

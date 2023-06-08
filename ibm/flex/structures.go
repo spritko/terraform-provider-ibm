@@ -2795,6 +2795,10 @@ func ResourceVolumeValidate(diff *schema.ResourceDiff) error {
 		return fmt.Errorf("'%s' storage block supports capacity up to %d.", profile, 9600)
 	} else if profile == "10iops-tier" && capacity > 4800 {
 		return fmt.Errorf("'%s' storage block supports capacity up to %d.", profile, 4800)
+	} else if profile != "sdp" && capacity > 16000 {
+		return fmt.Errorf("'%s' storage block supports capacity up to %d.", profile, 1600)
+	} else if profile != "sdp" && capacity < 10 {
+		return fmt.Errorf("'%s' storage block supports minimum capacity of %d.", profile, 10)
 	}
 
 	if iopsOk, ok := diff.GetOk("iops"); ok {
@@ -2806,9 +2810,12 @@ func ResourceVolumeValidate(diff *schema.ResourceDiff) error {
 		if oldProfile.(string) == "custom" || newProfile.(string) == "custom" {
 			diff.ForceNew("profile")
 		}
+		if oldProfile.(string) == "sdp" || newProfile.(string) == "sdp" {
+			diff.ForceNew("profile")
+		}
 	}
 
-	if profile != "custom" {
+	if profile != "custom" && profile != "sdp" {
 		if iops != 0 && diff.NewValueKnown("iops") && diff.HasChange("iops") {
 			return fmt.Errorf("VolumeError : iops is applicable for only custom volume profiles")
 		}
