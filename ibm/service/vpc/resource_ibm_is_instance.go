@@ -1188,6 +1188,9 @@ func instanceCreateByImage(d *schema.ResourceData, meta interface{}, profile, na
 		iopsOk, ok := bootvol[isVolumeIops]
 		iopsInt := iopsOk.(int)
 		if iopsInt != 0 && ok {
+			if iopsInt < 3000 {
+				return fmt.Errorf("[ERROR] Error creating instance, boot volume iops %d is too low, must be at least 3000", iopsInt)
+			}
 			iops := int64(iopsInt)
 			volTemplate.Iops = &iops
 		}
@@ -1200,6 +1203,7 @@ func instanceCreateByImage(d *schema.ResourceData, meta interface{}, profile, na
 		volTemplate.Profile = &vpcv1.VolumeProfileIdentity{
 			Name: &volprofstr,
 		}
+
 		var userTags *schema.Set
 		if v, ok := bootvol[isInstanceBootVolumeTags]; ok {
 			userTags = v.(*schema.Set)
