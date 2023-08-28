@@ -3480,6 +3480,7 @@ func instanceUpdate(d *schema.ResourceData, meta interface{}) error {
 
 	bootVolSize := "boot_volume.0.size"
 	if d.HasChange(bootVolSize) && !d.IsNewResource() {
+
 		old, new := d.GetChange(bootVolSize)
 		if new.(int) < old.(int) {
 			return fmt.Errorf("[ERROR] Error while updating boot volume size of the instance, only expansion is possible")
@@ -3492,6 +3493,44 @@ func instanceUpdate(d *schema.ResourceData, meta interface{}) error {
 		volPatchModel := &vpcv1.VolumePatch{
 			Capacity: &bootVol,
 		}
+		volPatchModelAsPatch, err := volPatchModel.AsPatch()
+		if err != nil {
+			return (fmt.Errorf("[ERROR] Error encountered while apply as patch for boot volume of instance %s", err))
+		}
+
+		updateVolumeOptions.VolumePatch = volPatchModelAsPatch
+
+		vol, res, err := instanceC.UpdateVolume(updateVolumeOptions)
+
+		if vol == nil || err != nil {
+			return (fmt.Errorf("[ERROR] Error encountered while expanding boot volume of instance %s/n%s", err, res))
+		}
+
+		_, err = isWaitForVolumeAvailable(instanceC, volId, d.Timeout(schema.TimeoutUpdate))
+		if err != nil {
+			return err
+		}
+	}
+
+	bootVolIops := "boot_volume.0.iops"
+	if d.HasChange(bootVolIops) && !d.IsNewResource() {
+		volId := d.Get("boot_volume.0.volume_id").(string)
+		updateVolumeOptions := &vpcv1.UpdateVolumeOptions{
+			ID: &volId,
+		}
+
+		_, newIops := d.GetChange(bootVolIops)
+		if newIops.(int) < 3000 {
+			return fmt.Errorf("[ERROR] Boot volume IOPS must beat least 3000")
+		}
+		iops := int64(newIops.(int))
+
+		profileName := d.Get("boot_volume.0.profile").(string)
+		volPatchModel := &vpcv1.VolumePatch{
+			Iops: &iops,
+			Profile: &vpcv1.VolumeProfileIdentity{
+				Name: &profileName,
+			}}
 		volPatchModelAsPatch, err := volPatchModel.AsPatch()
 
 		if err != nil {
@@ -3511,6 +3550,7 @@ func instanceUpdate(d *schema.ResourceData, meta interface{}) error {
 			return err
 		}
 	}
+
 	bootVolTags := "boot_volume.0.tags"
 	if d.HasChange(bootVolTags) && !d.IsNewResource() {
 		var userTags *schema.Set

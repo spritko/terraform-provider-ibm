@@ -758,6 +758,9 @@ func volUpdate(d *schema.ResourceData, meta interface{}, id, name string, hasNam
 		}
 		if d.HasChange(isVolumeProfileName) {
 			profile := d.Get(isVolumeProfileName).(string)
+			if profile == "sdp" || *vol.Profile.Name == "sdp" {
+				return fmt.Errorf("[ERROR] Error cannot change profile from/to sdp")
+			}
 			volumeProfilePatchModel.Profile = &vpcv1.VolumeProfileIdentity{
 				Name: &profile,
 			}
