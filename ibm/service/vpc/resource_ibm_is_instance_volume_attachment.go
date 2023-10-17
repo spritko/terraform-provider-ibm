@@ -235,8 +235,8 @@ func ResourceIBMISInstanceVolumeAttachmentValidator() *validate.ResourceValidato
 			Identifier:                 isInstanceVolCapacity,
 			ValidateFunctionIdentifier: validate.IntBetween,
 			Type:                       validate.TypeInt,
-			MinValue:                   "10",
-			MaxValue:                   "16000"})
+			MinValue:                   "1",
+			MaxValue:                   "32000"})
 
 	validateSchema = append(validateSchema,
 		validate.ValidateSchema{
@@ -335,25 +335,28 @@ func instanceVolAttachmentCreate(d *schema.ResourceData, meta interface{}, insta
 			}
 			snapCapacity = int64(int(*snapshotGet.MinimumCapacity))
 		}
-		var volCapacityInt int64
-		if volCapacity, ok := d.GetOk(isInstanceVolCapacity); ok {
-			volCapacityInt = int64(volCapacity.(int))
-			if volCapacityInt != 0 && volCapacityInt > snapCapacity {
-				volProtoVol.Capacity = &volCapacityInt
-			}
-		}
+
 		var iops int64
+		volProfileStr := ""
 		if volIops, ok := d.GetOk(isInstanceVolIops); ok {
 			iops = int64(volIops.(int))
 			if iops != 0 {
 				volProtoVol.Iops = &iops
 			}
-			volProfileStr := "custom"
+			volProfileStr = "custom"
+			if volProfile, ok := d.GetOk(isInstanceVolProfile); ok {
+				volProfileStrTemp := volProfile.(string)
+				if volProfileStrTemp == "custom" || volProfileStrTemp == "sdp" {
+					volProfileStr = volProfileStrTemp
+				} else {
+					return fmt.Errorf("[ERROR] Profile %s doesn't allow setting IOPS", volProfileStrTemp)
+				}
+			}
 			volProtoVol.Profile = &vpcv1.VolumeProfileIdentity{
 				Name: &volProfileStr,
 			}
 		} else {
-			volProfileStr := "general-purpose"
+			volProfileStr = "general-purpose"
 			if volProfile, ok := d.GetOk(isInstanceVolProfile); ok {
 				volProfileStr = volProfile.(string)
 				volProtoVol.Profile = &vpcv1.VolumeProfileIdentity{
@@ -363,6 +366,18 @@ func instanceVolAttachmentCreate(d *schema.ResourceData, meta interface{}, insta
 				volProtoVol.Profile = &vpcv1.VolumeProfileIdentity{
 					Name: &volProfileStr,
 				}
+			}
+		}
+		var volCapacityInt int64
+		if volCapacity, ok := d.GetOk(isInstanceVolCapacity); ok {
+			volCapacityInt = int64(volCapacity.(int))
+			if volCapacityInt != 0 && volCapacityInt > snapCapacity {
+				if volProfileStr != "sdp" {
+					if volCapacityInt < 10 || volCapacityInt > 16000 {
+						return fmt.Errorf("[ERROR] Capacity %d invalild for profile %s, must be between 10 aand 16000", volCapacityInt, volProfileStr)
+					}
+				}
+				volProtoVol.Capacity = &volCapacityInt
 			}
 		}
 
