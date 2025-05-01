@@ -379,7 +379,7 @@ func ResourceIBMISVolumeValidator() *validate.ResourceValidator {
 			ValidateFunctionIdentifier: validate.IntBetween,
 			Type:                       validate.TypeInt,
 			MinValue:                   "100",
-			MaxValue:                   "48000"})
+			MaxValue:                   "64000"})
 	validateSchema = append(validateSchema,
 		validate.ValidateSchema{
 			Identifier:                 "accesstag",
@@ -771,6 +771,10 @@ func volUpdate(d *schema.ResourceData, meta interface{}, id, name string, hasNam
 			}
 			iops := int64(d.Get(isVolumeIops).(int))
 			volumeProfilePatchModel.Iops = &iops
+			if iops > 48000 && profile != "sdp" {
+				return fmt.Errorf("[ERROR] Error profile %s does not support IOPS greater than 48000", profile)
+
+			}
 		}
 
 		volumeProfilePatch, err := volumeProfilePatchModel.AsPatch()
