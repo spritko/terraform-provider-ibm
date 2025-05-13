@@ -71,6 +71,11 @@ func DataSourceIbmIsShare() *schema.Resource {
 				Computed:    true,
 				Description: "The maximum input/output operation performance bandwidth per second for the file share.",
 			},
+			"bandwidth": {
+				Type:        schema.TypeInt,
+				Computed:    true,
+				Description: "The maximum input/output operation performance bandwidth (Mbs) for the file share.",
+			},
 			"latest_sync": &schema.Schema{
 				Type:        schema.TypeList,
 				Computed:    true,
@@ -147,6 +152,11 @@ func DataSourceIbmIsShare() *schema.Resource {
 				Type:        schema.TypeString,
 				Computed:    true,
 				Description: "The globally unique name of the profile this file share uses.",
+			},
+			"availability_mode": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "The availability of the share (zone vs regional).",
 			},
 			"replica_share": &schema.Schema{
 				Type:        schema.TypeList,
@@ -659,6 +669,10 @@ func dataSourceIbmIsShareRead(context context.Context, d *schema.ResourceData, m
 	if err = d.Set("iops", share.Iops); err != nil {
 		return diag.FromErr(fmt.Errorf("Error setting iops: %s", err))
 	}
+
+	if err = d.Set("bandwidth", flex.IntValue(share.Bandwidth)); err != nil {
+		return diag.FromErr(fmt.Errorf("Error setting bandwodth: %s", err))
+	}
 	latest_syncs := []map[string]interface{}{}
 	if share.LatestSync != nil {
 		latest_sync := make(map[string]interface{})
@@ -777,6 +791,11 @@ func dataSourceIbmIsShareRead(context context.Context, d *schema.ResourceData, m
 			return diag.FromErr(fmt.Errorf("Error setting zone %s", err))
 		}
 	}
+
+	if err = d.Set("availability_mode", share.AvailabilityMode); err != nil {
+		return diag.FromErr(fmt.Errorf("Error setting availability_mode: %s", err))
+	}
+
 	if err = d.Set("snapshot_count", flex.IntValue(share.SnapshotCount)); err != nil {
 		return flex.DiscriminatedTerraformErrorf(err, fmt.Sprintf("Error setting snapshot_count: %s", err), "(Data) ibm_is_share", "read", "set-snapshot_count").GetDiag()
 	}

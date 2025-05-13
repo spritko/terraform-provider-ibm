@@ -288,6 +288,13 @@ func ResourceIbmIsShare() *schema.Resource {
 				ValidateFunc: validate.InvokeValidator("ibm_is_share", "iops"),
 				Description:  "The maximum input/output operation performance bandwidth per second for the file share.",
 			},
+			"bandwidth": {
+				Type:         schema.TypeInt,
+				Optional:     true,
+				Computed:     true,
+				ValidateFunc: validate.InvokeValidator("ibm_is_share", "bandwidth"),
+				Description:  "The maximum input/output operation performance bandwidth MBps for the file share.",
+			},
 			"name": {
 				Type:         schema.TypeString,
 				Required:     true,
@@ -299,6 +306,11 @@ func ResourceIbmIsShare() *schema.Resource {
 				Optional:    true,
 				Computed:    true,
 				Description: "The globally unique name for this share profile.",
+			},
+			"availability_mode": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "The availability of the share (zone vs regional).",
 			},
 			"replica_share": &schema.Schema{
 				Type:          schema.TypeList,
@@ -983,7 +995,7 @@ func ResourceIbmIsShare() *schema.Resource {
 }
 
 func ResourceIbmIsShareValidator() *validate.ResourceValidator {
-	allowed_transit_encryption_modes := "none, user_managed"
+	allowed_transit_encryption_modes := "none, user_managed, stunnel"
 	validateSchema := make([]validate.ValidateSchema, 1)
 	validateSchema = append(validateSchema,
 		validate.ValidateSchema{
@@ -993,6 +1005,14 @@ func ResourceIbmIsShareValidator() *validate.ResourceValidator {
 			Optional:                   true,
 			MinValue:                   "100",
 			MaxValue:                   "96000",
+		},
+		validate.ValidateSchema{
+			Identifier:                 "bandwidth",
+			ValidateFunctionIdentifier: validate.IntBetween,
+			Type:                       validate.TypeInt,
+			Optional:                   true,
+			MinValue:                   "1",
+			MaxValue:                   "1024",
 		},
 		validate.ValidateSchema{
 			Identifier:                 "name",
@@ -1043,13 +1063,19 @@ func ResourceIbmIsShareValidator() *validate.ResourceValidator {
 	return &resourceValidator
 }
 
+func isRegionalShareProfile(profile string) bool {
+	return profile == "rfs"
+}
+
 func resourceIbmIsShareCreate(context context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	vpcClient, err := meta.(conns.ClientSession).VpcV1API()
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	createShareOptions := &vpcv1.CreateShareOptions{}
+	createShareOptions := &vpcv1.CreateShareOptions{
+		Headers: map[string]string{"maturity": "beta"},
+	}
 
 	sharePrototype := &vpcv1.SharePrototype{}
 	if accessControlModeIntf, ok := d.GetOk("access_control_mode"); ok {
@@ -1077,6 +1103,8 @@ func resourceIbmIsShareCreate(context context.Context, d *schema.ResourceData, m
 		}
 		sharePrototype.ResourceGroup = resourceGroup
 	}
+
+	profileName := ""
 	_, snapshotOk := d.GetOk("source_snapshot")
 	_, sizeOk := d.GetOk("size")
 	if snapshotOk || sizeOk {
@@ -1104,7 +1132,19 @@ func resourceIbmIsShareCreate(context context.Context, d *schema.ResourceData, m
 			}
 		}
 
+		if profileIntf, ok := d.GetOk("profile"); ok {
+			profileStr := profileIntf.(string)
+			profileName = profileStr
+			profile := &vpcv1.ShareProfileIdentity{
+				Name: &profileStr,
+			}
+			sharePrototype.Profile = profile
+		}
+
 		if replicaShareIntf, ok := d.GetOk("replica_share"); ok {
+			if isRegionalShareProfile(profileName) {
+				return diag.Errorf("Cannot specify 'replica_share' with a regional share ")
+			}
 			replicaShareMap := replicaShareIntf.([]interface{})[0].(map[string]interface{})
 			replicaShare := &vpcv1.SharePrototypeShareContext{}
 			iopsIntf, ok := replicaShareMap["iops"]
@@ -1192,18 +1232,22 @@ func resourceIbmIsShareCreate(context context.Context, d *schema.ResourceData, m
 	}
 	if iopsIntf, ok := d.GetOk("iops"); ok {
 		iops := int64(iopsIntf.(int))
+		if isRegionalShareProfile(profileName) {
+			return diag.Errorf("Regional shares (profile=rfs) does not support IOPS")
+		}
 		sharePrototype.Iops = &iops
 	}
+	if bandwidthIntf, ok := d.GetOk("bandwidth"); ok {
+		bw := int64(bandwidthIntf.(int))
+		if !isRegionalShareProfile(profileName) {
+			return diag.Errorf("Bandwidth is only supported o regional shares (profile=rfs)")
+		}
+		sharePrototype.Bandwidth = &bw
+	}
+
 	if nameIntf, ok := d.GetOk("name"); ok {
 		name := nameIntf.(string)
 		sharePrototype.Name = &name
-	}
-	if profileIntf, ok := d.GetOk("profile"); ok {
-		profileStr := profileIntf.(string)
-		profile := &vpcv1.ShareProfileIdentity{
-			Name: &profileStr,
-		}
-		sharePrototype.Profile = profile
 	}
 
 	if shareTargetPrototypeIntf, ok := d.GetOk("mount_targets"); ok {
@@ -1221,6 +1265,9 @@ func resourceIbmIsShareCreate(context context.Context, d *schema.ResourceData, m
 	}
 	if zone, ok := d.GetOk("zone"); ok {
 		zonestr := zone.(string)
+		if isRegionalShareProfile(profileName) {
+			return diag.Errorf("Cannot specify zone on regional share")
+		}
 		zone := &vpcv1.ZoneIdentity{
 			Name: &zonestr,
 		}
@@ -1367,6 +1414,9 @@ func resourceIbmIsShareRead(context context.Context, d *schema.ResourceData, met
 	if err = d.Set("iops", flex.IntValue(share.Iops)); err != nil {
 		return diag.FromErr(fmt.Errorf("Error setting iops: %s", err))
 	}
+	if err = d.Set("bandwidth", flex.IntValue(share.Bandwidth)); err != nil {
+		return diag.FromErr(fmt.Errorf("Error setting bandwodth: %s", err))
+	}
 	if err = d.Set("name", share.Name); err != nil {
 		return diag.FromErr(fmt.Errorf("Error setting name: %s", err))
 	}
@@ -1375,6 +1425,11 @@ func resourceIbmIsShareRead(context context.Context, d *schema.ResourceData, met
 			return diag.FromErr(fmt.Errorf("Error setting profile: %s", err))
 		}
 	}
+
+	if err = d.Set("availability_mode", share.AvailabilityMode); err != nil {
+		return diag.FromErr(fmt.Errorf("Error setting availability_mode: %s", err))
+	}
+
 	if share.ResourceGroup != nil {
 		if err = d.Set("resource_group", *share.ResourceGroup.ID); err != nil {
 			return diag.FromErr(fmt.Errorf("Error setting resource_group: %s", err))
